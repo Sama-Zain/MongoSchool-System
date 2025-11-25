@@ -13,18 +13,35 @@ function ask(q) {
     return new Promise(res => rl.question(q, res));
 }
 
-function processScore(score, id) {
-    if (!score || score.length < 4) score = [1,2,3,4];
-    if (id === 1) score[2] = 5;
-    else score[3] = 6;
-    return score.map(x => x*20);
-}
+// ---------------- PROCESS FUNCTIONS ----------------
 
 async function autoProcessStudent(students, doc) {
-    const multiplied = processScore(doc.Score, doc._id);
-    await students.updateOne({ _id: doc._id }, { $set: { Score: multiplied } });
-    console.log("Auto Processing Completed For Student _id = " + doc._id);
+    if (doc.Score && Array.isArray(doc.Score)) {
+        if (doc._id === 1) {
+            doc.Score[2] = 5;   // third position
+        } else {
+            doc.Score[3] = 6;   // fourth position
+        }
+        const multiplied = doc.Score.map(x => x * 20);
+        await students.updateOne({ _id: doc._id }, { $set: { Score: multiplied } });
+        console.log("Auto Processing Completed For Student _id = " + doc._id);
+    }
 }
+
+async function autoProcessCourse(courses, doc) {
+    if (doc.Score && Array.isArray(doc.Score)) {
+        if (doc._id === 1) {
+            doc.Score[2] = 5;
+        } else {
+            doc.Score[3] = 6;
+        }
+        const multiplied = doc.Score.map(x => x * 20);
+        await courses.updateOne({ _id: doc._id }, { $set: { Score: multiplied } });
+        console.log("Auto Processing Completed For Course _id = " + doc._id);
+    }
+}
+
+// --------------------- MAIN RUN ---------------------
 
 async function run() {
     try {
@@ -35,6 +52,8 @@ async function run() {
         const students = db.collection("Students");
         const courses = db.collection("Courses");
 
+        // ---------------- INITIAL INSERT ----------------
+
         await students.insertMany([
             { _id: 1, name: "Ali", age: 16 },
             { _id: 2, name: "Sara", age: 15 },
@@ -44,39 +63,60 @@ async function run() {
         ]).catch(()=>{});
 
         await courses.insertMany([
-            { _id: 10, title: "Math" },
-            { _id: 11, title: "Physics" },
-            { _id: 12, title: "Biology" },
-            { _id: 13, title: "Chemistry" },
-            { _id: 14, title: "Arabic" }
+            { _id: 1, title: "Math" },
+            { _id: 2, title: "Physics" },
+            { _id: 3, title: "Biology" },
+            { _id: 4, title: "Chemistry" },
+            { _id: 5, title: "Arabic" }
         ]).catch(()=>{});
-        
+
+        // ---------------- DELETE SOME DOCUMENTS ----------------
         await students.deleteOne({_id:3});
-        await courses.deleteOne({_id:12});
+        await courses.deleteOne({_id:3});
 
-        await students.updateOne({name:"Ali"}, { $set: { courses: [10,11] } });
-        await students.updateOne({name:"Sara"}, { $set: { courses: [11,13] } });
-        await students.updateOne({name:"Omar"}, { $set: { courses: [10,12,14] } });
-        await students.updateOne({name:"Ahmed"}, { $set: { courses: [13,14] } });
+        // ---------------- ASSIGN COURSES ----------------
+        await students.updateOne({name:"Ali"}, { $set: { courses: [1,2] } });
+        await students.updateOne({name:"Sara"}, { $set: { courses: [2,4] } });
+        await students.updateOne({name:"Omar"}, { $set: { courses: [1,3,5] } });
+        await students.updateOne({name:"Ahmed"}, { $set: { courses: [4,5] } });
 
+        // ---------------- DEFAULT SCORES ----------------
         const defaultScores = [
-    { _id: 1, name: "Ali", Score: [20, 22, 15, 30] },
-    { _id: 2, name: "Sara", Score: [18, 17, 19, 20] },
-    { _id: 3, name: "Omar", Score: [16, 14, 13, 15] },
-    { _id: 4, name: "Ahmed", Score: [35, 25, 19, 20] }
-    ];
-    for (let ds of defaultScores) {
-        const processed = processScore(ds.Score, ds._id === 1 ? 1 : 0);
-        await students.updateOne({ name: ds.name }, { $set: { Score: processed } });
-    }
-    
-        await courses.updateOne({ _id: 10 }, { $set: { Score: 50 } });
-        await courses.updateOne({ _id: 11 }, { $set: { Score: 80 } });
-        await courses.updateOne({ _id: 13 }, { $set: { Score: 55 } });
-        await courses.updateOne({ _id: 14 }, { $set: { Score: 60 } });
+            { _id: 1, name: "Ali", Score: [20, 22, 15, 30] },
+            { _id: 2, name: "Sara", Score: [18, 17, 19, 20] },
+            { _id: 4, name: "Ahmed", Score: [35, 25, 19, 20] }
+        ];
+
+        for (let ds of defaultScores) {
+            await students.updateOne(
+                { _id: ds._id },
+                { $set: { Score: ds.Score } },
+                { upsert: true }
+            );
+            await autoProcessStudent(students, ds);
+        }
+          const defaultCourses = [
+              { _id: 1, Score: [50, 60, 70,10] },   
+              { _id: 2, Score: [65, 70, 80, 15] },
+              { _id: 4, Score: [55, 60, 65, 20] },
+              { _id: 5, Score: [60, 65, 70, 10] }  
+            ];
+
+
+        for (let course of defaultCourses) {
+            await courses.updateOne(
+                { _id: course._id },
+                { $set: { Score: course.Score } },
+                { upsert: true }
+            );
+            await autoProcessCourse(courses, course);
+        }
+
+        // --------------------- MENU LOOP ---------------------
 
         let exit = false;
         while(!exit){
+
             console.log("\n=== Choose an option ===");
             console.log("1) Insert New Student");
             console.log("2) Delete Student by _id");
@@ -91,96 +131,99 @@ async function run() {
             const choice = await ask("Your choice: ");
 
             switch(choice){
-                case "1": // Insert Student
-                 const id = parseInt(await ask("Enter _id: "));
-                 const name = await ask("Enter name: ");
-                 const age = parseInt(await ask("Enter age: "));
-                 const scoreInput = await ask("Enter Scores (10,20,30,40): ");
-                 const score = scoreInput.split(",").map(Number);
-                 const coursesInput = await ask("Enter course IDs for this student (comma separated): ");
-                 const courses = coursesInput.split(",").map(Number);
-                
-                const newDoc = { _id: id, name, age, Score: score, courses };
-                await students.insertOne(newDoc);
-                await autoProcessStudent(students, newDoc);
-                console.log("Insert Completed and Auto Processing Applied");
-                break;
 
+                case "1": // INSERT STUDENT
+                    const id = parseInt(await ask("Enter _id: "));
+                    const name = await ask("Enter name: ");
+                    const age = parseInt(await ask("Enter age: "));
+                    const scoreInput = await ask("Enter Scores (comma separated): ");
+                    const score = scoreInput.split(",").map(Number);
+                    const coursesInput = await ask("Enter course IDs (comma separated): ");
+                    const coursesList = coursesInput.split(",").map(Number);
 
-                case "2": // Delete Student
+                    const newDoc = { _id: id, name, age, Score: score, courses: coursesList };
+                    await students.insertOne(newDoc);
+                    await autoProcessStudent(students, newDoc);
+                    break;
+
+                case "2": // DELETE STUDENT
                     const delStudentId = parseInt(await ask("Enter student _id: "));
                     const del1 = await students.deleteOne({_id: delStudentId});
                     console.log(del1.deletedCount ? "Student Deleted":"Student Not Found");
                     break;
 
-                case "3": // Delete Course
+                case "3": // DELETE COURSE
                     const delCourseId = parseInt(await ask("Enter course _id: "));
                     const del2 = await courses.deleteOne({_id: delCourseId});
                     console.log(del2.deletedCount ? "Course Deleted":"Course Not Found");
                     break;
 
-                case "4": // Update Student Score
+                case "4": // UPDATE STUDENT SCORE
                     const upId = parseInt(await ask("Enter student _id: "));
                     const student = await students.findOne({_id: upId});
                     if(!student){ console.log("Student Not Found"); break; }
-                    const newScores = (await ask("Enter new Scores: ")).split(",").map(Number);
-                    const multiplied = processScore(newScores, upId);
-                    await students.updateOne({_id: upId}, {$set:{Score: multiplied}});
-                    console.log("Score Updated Successfully and Multiplied by 20");
+                    const newScores = (await ask("Enter new Scores (comma separated): ")).split(",").map(Number);
+                    const updatedStudent = { ...student, Score: newScores };
+                    await autoProcessStudent(students, updatedStudent);
                     break;
 
-                case "5": // Insert Course
+                case "5": // INSERT COURSE
                     const courseId = parseInt(await ask("Enter course _id: "));
                     const courseTitle = await ask("Enter course title: ");
-                    const courseScore = parseInt(await ask("Enter course Score: ")) || 0;
-                    await courses.insertOne({ _id: courseId, title: courseTitle, Score: courseScore });
-                    console.log("Course Inserted Successfully");
+                    const courseScoreInput = await ask("Enter Scores (comma separated): ");
+                    const courseScore = courseScoreInput.split(",").map(Number);
+                    const newCourse = { _id: courseId, title: courseTitle, Score: courseScore };
+                    await courses.insertOne(newCourse);
+                    await autoProcessCourse(courses, newCourse);
                     break;
 
-                case "6": // Update Course Score
+                case "6": // UPDATE COURSE SCORE
                     const upCourseId = parseInt(await ask("Enter course _id: "));
                     const course = await courses.findOne({_id: upCourseId});
                     if(!course){ console.log("Course Not Found"); break; }
-                    const newCourseScore = parseInt(await ask("Enter new course Score: ")) || 0;
-                    await courses.updateOne({_id: upCourseId}, {$set:{Score:newCourseScore}});
-                    console.log("Course Score Updated Successfully");
+                    const newCourseScoreInput = await ask("Enter new Scores (comma separated): ");
+                    const newCourseScore = newCourseScoreInput.split(",").map(Number);
+                    const updatedCourse = { ...course, Score: newCourseScore };
+                    await autoProcessCourse(courses, updatedCourse);
                     break;
 
-                
-                case "7": // Assign courses to student
-                const studentAssign = await students.findOne({ _id: studentIdAssign });
-                if (!studentAssign) { console.log("Student Not Found"); break; }
-                const studentIdAssign = parseInt(await ask("Enter student _id: "));
-                const coursesAssignInput = await ask("Enter course IDs to assign (comma separated): ");
-                const coursesAssign = coursesAssignInput.split(",").map(Number);
-                const currentCourses = studentAssign.courses || [];
-                await students.updateOne(
-                    { _id: studentIdAssign },
-                    { $set: { courses: [...new Set([...currentCourses, ...coursesAssign])] } }
-                );
-                console.log("Courses Assigned Successfully");
-                break;
-                
-                case "8": // Remove courses from student
-                const studentIdRemove = parseInt(await ask("Enter student _id: "));
-                const studentRemove = await students.findOne({ _id: studentIdRemove });
-                if (!studentRemove) { console.log("Student Not Found"); break; }
-                const coursesRemoveInput = await ask("Enter course IDs to remove (comma separated): ");
-                const coursesRemove = coursesRemoveInput.split(",").map(Number);
-                const updatedCourses = (studentRemove.courses || []).filter(id => !coursesRemove.includes(id));
-                await students.updateOne(
-                    { _id: studentIdRemove },
-                    { $set: { courses: updatedCourses } }
-                );
-                console.log("Courses Removed Successfully");
-                break;
-                
-                
-                case "9": exit=true; break;
-                default: console.log("Invalid Choice");
+                case "7": // ASSIGN COURSES
+                    const studentIdAssign = parseInt(await ask("Enter student _id: "));
+                    const studentAssign = await students.findOne({ _id: studentIdAssign });
+                    if(!studentAssign){ console.log("Student Not Found"); break; }
+                    const coursesAssignInput = await ask("Enter course IDs to assign (comma separated): ");
+                    const coursesAssign = coursesAssignInput.split(",").map(Number);
+                    const currentCourses = studentAssign.courses || [];
+                    await students.updateOne(
+                        { _id: studentIdAssign },
+                        { $set: { courses: [...new Set([...currentCourses, ...coursesAssign])] } }
+                    );
+                    console.log("Courses Assigned Successfully");
+                    break;
+
+                case "8": // REMOVE COURSES
+                    const studentIdRemove = parseInt(await ask("Enter student _id: "));
+                    const studentRemove = await students.findOne({ _id: studentIdRemove });
+                    if (!studentRemove) { console.log("Student Not Found"); break; }
+                    const coursesRemoveInput = await ask("Enter course IDs to remove (comma separated): ");
+                    const coursesRemove = coursesRemoveInput.split(",").map(Number);
+                    const updatedCourses = (studentRemove.courses || []).filter(id => !coursesRemove.includes(id));
+                    await students.updateOne(
+                        { _id: studentIdRemove },
+                        { $set: { courses: updatedCourses } }
+                    );
+                    console.log("Courses Removed Successfully");
+                    break;
+
+                case "9": // EXIT
+                    exit = true;
+                    break;
+
+                default:
+                    console.log("Invalid Choice");
             }
         }
-        
+
         rl.close();
         console.log("Program Finished");
 
