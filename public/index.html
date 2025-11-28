@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>School Management</title>
+<style>
+/* ===== General Styles ===== */
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa, #c3cfe2);
+    margin: 0;
+    padding: 20px;
+    color: #333;
+}
+
+h1 {
+    text-align: center;
+    color: #4b6cb7;
+    font-size: 2.5rem;
+    margin-bottom: 40px;
+}
+
+/* ===== Sections ===== */
+section {
+    background: #fff;
+    border-radius: 20px;
+    padding: 25px 30px;
+    margin: 20px auto;
+    width: 95%;
+    max-width: 700px;
+    box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+    transition: transform 0.2s;
+}
+section:hover {
+    transform: translateY(-5px);
+}
+
+h2 {
+    color: #4b6cb7;
+    font-size: 1.7rem;
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+/* ===== Form Rows ===== */
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-bottom: 18px;
+}
+
+.form-row input {
+    flex: 1 1 45%;
+    padding: 12px 15px;
+    border-radius: 12px;
+    border: 1px solid #b0bec5;
+    font-size: 1rem;
+    transition: 0.3s;
+}
+
+.form-row input:focus {
+    border-color: #4b6cb7;
+    box-shadow: 0 0 8px rgba(75,108,183,0.3);
+    outline: none;
+}
+/* ===== Buttons ===== */
+button {
+    padding: 12px 0;
+    border-radius: 12px;
+    border: none;
+    cursor: pointer;
+    background: #4b6cb7;
+    color: white;
+    font-weight: 600;
+    font-size: 1rem;
+    transition: 0.3s;
+    flex: 1; /* كل زر يشغل نفس المساحة */
+    text-align: center;
+}
+
+.form-row button {
+    margin-top: 5px;
+}
+
+/* Hover effect */
+button:hover {
+    background: #395091;
+    transform: translateY(-2px);
+}
+
+/* Adjust spacing for multiple buttons in a row */
+.form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px; /* مسافة متساوية بين الأزرار */
+    margin-bottom: 18px;
+}
+
+
+/* ===== Preformatted Output ===== */
+pre {
+    background: #f0f4ff;
+    border-radius: 12px;
+    padding: 15px;
+    overflow: auto;
+    white-space: pre-wrap;
+    word-wrap: break-word;
+    border: 1px solid #c3cfe2;
+    max-height: 300px;
+    font-size: 0.95rem;
+    color: #1e2a78;
+}
+
+/* ===== Responsive ===== */
+@media (max-width: 500px) {
+    .form-row input, .form-row button {
+        flex: 1 1 100%;
+    }
+}
+</style>
+</head>
+<body>
+
+<h1>School Management System</h1>
+
+<section>
+<h2>Students</h2>
+<div class="form-row">
+    <input id="st_id" placeholder="ID">
+    <input id="st_name" placeholder="Name">
+</div>
+<div class="form-row">
+    <input id="st_age" placeholder="Age">
+    <input id="st_score" placeholder="Scores (comma separated)">
+</div>
+<div class="form-row buttons-row"">
+    <button onclick="insertStudent()">Add Student</button>
+    <button onclick="loadStudents()">Load Students</button>
+</div>
+<div class="form-row buttons-row">
+    <input id="del_st" placeholder="ID to delete">
+    <button onclick="deleteStudent()">Delete Student</button>
+</div>
+<div class="form-row buttons-row"">
+    <input id="up_st_id" placeholder="ID to update score">
+    <input id="up_st_score" placeholder="New Scores (comma separated)">
+    <button onclick="updateStudentScore()">Update Score</button>
+</div>
+<pre id="students_list"></pre>
+</section>
+
+<section>
+<h2>Courses</h2>
+<div class="form-row">
+    <input id="c_id" placeholder="ID">
+    <input id="c_title" placeholder="Title">
+</div>
+<div class="form-row">
+    <input id="c_score" placeholder="Scores (comma separated)">
+    <button onclick="insertCourse()">Add Course</button>
+</div>
+<div class="form-row buttons-row">
+    <input id="del_c" placeholder="ID to delete">
+    <button onclick="deleteCourse()">Delete Course</button>
+</div>
+<div class="form-row buttons-row">
+    <input id="up_c_id" placeholder="ID to update score">
+    <input id="up_c_score" placeholder="New Scores (comma separated)">
+    <button onclick="updateCourseScore()">Update Score</button>
+</div>
+<div class="form-row buttons-row">
+    <button onclick="loadCourses()">Load Courses</button>
+</div>
+<pre id="courses_list"></pre>
+</section>
+
+<section>
+<h2>Assign / Remove Courses</h2>
+<div class="form-row buttons-row">
+    <input id="assign_st_id" placeholder="Student ID">
+    <input id="assign_courses" placeholder="Course IDs (comma separated)">
+</div>
+<div class="form-row buttons-row">
+    <button onclick="assignCourses()">Assign Courses</button>
+    <button onclick="removeCourses()">Remove Courses</button>
+    <button onclick="loadStudents()">Refresh Students</button>
+</div>
+</section>
+
+<script>
+// --- API Helper ---
+async function api(path, method="GET", body=null){
+    const res = await fetch(path, {
+        method,
+        headers: body ? {"Content-Type":"application/json"} : undefined,
+        body: body ? JSON.stringify(body) : undefined
+    });
+    return res.json();
+}
+
+// --- Students ---
+async function loadStudents(){ 
+    const data = await api("/students"); 
+    document.getElementById("students_list").textContent = JSON.stringify(data,null,2); 
+}
+async function insertStudent(){ 
+    const doc = { 
+        _id: Number(document.getElementById("st_id").value), 
+        name: document.getElementById("st_name").value, 
+        age: Number(document.getElementById("st_age").value), 
+        Score: document.getElementById("st_score").value ? document.getElementById("st_score").value.split(",").map(Number) : undefined 
+    }; 
+    const res = await api("/students","POST",doc); 
+    alert(JSON.stringify(res)); 
+    loadStudents(); 
+}
+async function deleteStudent(){ 
+    const id = Number(document.getElementById("del_st").value); 
+    const res = await api(`/students/${id}`,"DELETE"); 
+    alert(JSON.stringify(res)); 
+    loadStudents(); 
+}
+async function updateStudentScore(){ 
+    const id = Number(document.getElementById("up_st_id").value); 
+    const score = document.getElementById("up_st_score").value.split(",").map(Number); 
+    const res = await api(`/students/${id}/score`,"PUT",{Score:score}); 
+    alert(JSON.stringify(res)); 
+    loadStudents(); 
+}
+
+// --- Courses ---
+async function loadCourses(){ 
+    const data = await api("/courses"); 
+    document.getElementById("courses_list").textContent = JSON.stringify(data,null,2); 
+}
+async function insertCourse(){ 
+    const doc = { 
+        _id: Number(document.getElementById("c_id").value), 
+        title: document.getElementById("c_title").value, 
+        Score: document.getElementById("c_score").value ? document.getElementById("c_score").value.split(",").map(Number) : undefined 
+    }; 
+    const res = await api("/courses","POST",doc); 
+    alert(JSON.stringify(res)); 
+    loadCourses(); 
+}
+async function deleteCourse(){ 
+    const id = Number(document.getElementById("del_c").value); 
+    const res = await api(`/courses/${id}`,"DELETE"); 
+    alert(JSON.stringify(res)); 
+    loadCourses(); 
+}
+async function updateCourseScore(){ 
+    const id = Number(document.getElementById("up_c_id").value); 
+    const score = document.getElementById("up_c_score").value.split(",").map(Number); 
+    const res = await api(`/courses/${id}/score`,"PUT",{Score:score}); 
+    alert(JSON.stringify(res)); 
+    loadCourses(); 
+}
+
+// --- Assign / Remove ---
+async function assignCourses() {
+    const id = Number(document.getElementById("assign_st_id").value);
+    const courses = document.getElementById("assign_courses").value
+                     .split(",").map(x => Number(x.trim()));
+    const res = await api(`/students/${id}/assign`, "POST", { courses });
+    alert(JSON.stringify(res));
+    loadStudents();
+}
+async function removeCourses(){
+    const id = Number(document.getElementById("assign_st_id").value);
+    const courses = document.getElementById("assign_courses").value.split(",").map(Number);
+    const res = await api(`/students/${id}/remove`, "POST", { courses });
+    alert(JSON.stringify(res));
+    loadStudents();
+}
+
+// --- Load on start ---
+loadStudents();
+loadCourses();
+</script>
+
+</body>
+</html>
